@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List
@@ -6,8 +6,16 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
+import uuid
+import os
+import asyncio
+from datetime import datetime, timedelta
 
 app = FastAPI()
+
+# --- In-memory token store with expiry ---
+# token: {"file": filename, "expires_at": datetime}
+token_store = {}
 
 # --- Pydantic Models ---
 class Expense(BaseModel):
@@ -85,7 +93,7 @@ def generate_reimbursement_pdf(data: ReimbursementRequest, filename="reimburseme
     story.append(summary_table)
     story.append(Spacer(1, 20))
 
-    # Approvals Table (without finance)
+    # Approvals Table
     approvals = [
         ["Employee Signature:", data.employee_signature, "Date:", data.employee_date],
         ["Manager Signature:", data.manager_signature, "Date:", data.manager_date]
@@ -106,9 +114,47 @@ def generate_reimbursement_pdf(data: ReimbursementRequest, filename="reimburseme
     doc.build(story)
     return filename
 
-# --- API Endpoint ---
-@app.post("/generate-pdf/")
-async def create_pdf(request: ReimbursementRequest):
-    filename = "reimbursement_form.pdf"
+# --- Step 1: Prepare PDF and return token ---
+@app.post("/generate-pdf/prepare/")
+async def prepare_pdf(request: ReimbursementRequest):
+    token = str(uuid.uuid4())
+    filename = f"{token}.pdf"
     generate_reimbursement_pdf(request, filename)
-    return FileResponse(filename, media_type='application/pdf', filename=filename)
+    
+    # Set expiry 5 minutes from now
+    expires_at = datetime.utcnow() + timedelta(minutes=5)
+    token_store[token] = {"file": filename, "expires_at": expires_at}
+    
+    return {"token": token, "download_url": f"/generate-pdf/download/{token}"}
+
+# --- Step 2: Download PDF using token ---
+@app.get("/generate-pdf/download/{token}")
+async def download_pdf(token: str):
+    if token not in token_store:
+        raise HTTPException(status_code=404, detail="Invalid or expired token")
+    
+    entry = token_store[token]
+    if datetime.utcnow() > entry["expires_at"]:
+        # Remove expired file
+        if os.path.exists(entry["file"]):
+            os.remove(entry["file"])
+        token_store.pop(token)
+        raise HTTPException(status_code=410, detail="Token expired")
+    
+    return FileResponse(entry["file"], media_type="application/pdf", filename="reimbursement_form.pdf")
+
+# --- Background cleanup for expired files ---
+async def cleanup_expired_files():
+    while True:
+        now = datetime.utcnow()
+        expired_tokens = [t for t, e in token_store.items() if now > e["expires_at"]]
+        for t in expired_tokens:
+            file_path = token_store[t]["file"]
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            token_store.pop(t)
+        await asyncio.sleep(60)  # check every minute
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(cleanup_expired_files())
