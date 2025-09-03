@@ -125,7 +125,7 @@ async def prepare_pdf(request: ReimbursementRequest):
     expires_at = datetime.utcnow() + timedelta(minutes=5)
     token_store[token] = {"file": filename, "expires_at": expires_at}
     
-    return {"token": token, "download_url": f"/generate-pdf/download/{token}"}
+    return {"download_url": f"https://reimbursemnet-generator.onrender.com/generate-pdf/download/{token}"}
 
 # --- Step 2: Download PDF using token ---
 @app.get("/generate-pdf/download/{token}")
