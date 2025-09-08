@@ -13,8 +13,7 @@ from datetime import datetime, timedelta
 
 app = FastAPI()
 
-# --- In-memory token store with expiry ---
-# token: {"file": filename, "expires_at": datetime}
+# In-memory token store with expiry
 token_store = {}
 
 # --- Pydantic Models ---
@@ -30,16 +29,15 @@ class ReimbursementRequest(BaseModel):
     employee_id: str
     department: str
     contact: str
+    submission_date: str
     expenses: List[Expense]
-    total_claimed: str
-    advance_taken: str
-    net_payable: str
+    total_reimbursement_amount: str
     employee_signature: str
     employee_date: str
-    manager_signature: str = ""  # left empty by default
-    manager_date: str = ""       # left empty by default
+    manager_signature: str=""
+    manager_date: str=""
 
-# --- PDF Generation Function ---
+# --- PDF Generation ---
 def generate_reimbursement_pdf(data: ReimbursementRequest, filename="reimbursement_form.pdf"):
     styles = getSampleStyleSheet()
     story = []
@@ -50,84 +48,71 @@ def generate_reimbursement_pdf(data: ReimbursementRequest, filename="reimburseme
     story.append(Paragraph("<b>Reimbursement Request Form</b>", styles['Title']))
     story.append(Spacer(1, 12))
 
-    # Employee Info Table
+    # Employee Info
     employee_info = [
         ["Employee Name:", data.employee_name, "Employee ID:", data.employee_id],
-        ["Department:", data.department, "Contact:", data.contact]
+        ["Department:", data.department, "Contact:", data.contact],
+        ["Submission Date:", data.submission_date, "", ""]
     ]
     emp_table = Table(employee_info, colWidths=[100, 150, 100, 150])
-    emp_table.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE")
-    ]))
+    emp_table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+                                   ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
     story.append(emp_table)
     story.append(Spacer(1, 20))
 
     # Expense Table
     expense_data = [["Date", "Category", "Amount", "Description", "Invoice"]] + \
-        [[e.date, e.category, e.amount, e.description, e.invoice] for e in data.expenses]
+                   [[e.date, e.category, e.amount, e.description, e.invoice] for e in data.expenses]
     expense_table = Table(expense_data, colWidths=[70, 100, 70, 150, 120])
-    expense_table.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-        ("ALIGN", (2,1), (2,-1), "RIGHT"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("FONTSIZE", (0,0), (-1,-1), 9)
-    ]))
+    expense_table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.black),
+                                       ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+                                       ("ALIGN", (2,1), (2,-1), "RIGHT"),
+                                       ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                                       ("FONTSIZE", (0,0), (-1,-1), 9)]))
     story.append(Paragraph("<b>Expense Details</b>", styles['Heading3']))
     story.append(expense_table)
     story.append(Spacer(1, 20))
 
-    # Summary Table
-    summary = [
-        ["Total Claimed:", data.total_claimed],
-        ["Advance Taken:", data.advance_taken],
-        ["Net Payable:", data.net_payable]
-    ]
-    summary_table = Table(summary, colWidths=[150, 200])
-    summary_table.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (-1,-1), colors.whitesmoke)
-    ]))
+    # Summary
+    summary = [["Total Reimbursement Amount:", data.total_reimbursement_amount]]
+    summary_table = Table(summary, colWidths=[200, 200])
+    summary_table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.black),
+                                       ("BACKGROUND", (0,0), (-1,-1), colors.whitesmoke)]))
     story.append(Paragraph("<b>Summary</b>", styles['Heading3']))
     story.append(summary_table)
     story.append(Spacer(1, 20))
 
-    # Approvals Table
+    # Approvals
     approvals = [
         ["Employee Signature:", data.employee_signature, "Date:", data.employee_date],
         ["Manager Signature:", data.manager_signature, "Date:", data.manager_date]
     ]
     approvals_table = Table(approvals, colWidths=[130, 150, 50, 90])
-    approvals_table.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (-1,-1), colors.whitesmoke)
-    ]))
+    approvals_table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.black),
+                                         ("BACKGROUND", (0,0), (-1,-1), colors.whitesmoke)]))
     story.append(Paragraph("<b>Approvals</b>", styles['Heading3']))
     story.append(approvals_table)
     story.append(Spacer(1, 20))
 
-    # Footer Note
+    # Footer
     story.append(Paragraph("<i>Note: Please attach original invoices/receipts for all expenses claimed.</i>", styles['Normal']))
 
-    # Build PDF
     doc.build(story)
     return filename
 
-# --- Step 1: Prepare PDF and return token ---
+# --- Prepare PDF and return token ---
 @app.post("/generate-pdf/prepare/")
 async def prepare_pdf(request: ReimbursementRequest):
     token = str(uuid.uuid4())
     filename = f"{token}.pdf"
     generate_reimbursement_pdf(request, filename)
-    
-    # Set expiry 5 minutes from now
+
     expires_at = datetime.utcnow() + timedelta(minutes=5)
     token_store[token] = {"file": filename, "expires_at": expires_at}
     
     return {"download_url": f"https://reimbursemnet-generator.onrender.com/generate-pdf/download/{token}"}
 
-# --- Step 2: Download PDF using token ---
+# --- Download PDF ---
 @app.get("/generate-pdf/download/{token}")
 async def download_pdf(token: str):
     if token not in token_store:
@@ -135,7 +120,6 @@ async def download_pdf(token: str):
     
     entry = token_store[token]
     if datetime.utcnow() > entry["expires_at"]:
-        # Remove expired file
         if os.path.exists(entry["file"]):
             os.remove(entry["file"])
         token_store.pop(token)
@@ -143,7 +127,7 @@ async def download_pdf(token: str):
     
     return FileResponse(entry["file"], media_type="application/pdf", filename="reimbursement_form.pdf")
 
-# --- Background cleanup for expired files ---
+# --- Background cleanup ---
 async def cleanup_expired_files():
     while True:
         now = datetime.utcnow()
@@ -153,7 +137,7 @@ async def cleanup_expired_files():
             if os.path.exists(file_path):
                 os.remove(file_path)
             token_store.pop(t)
-        await asyncio.sleep(60)  # check every minute
+        await asyncio.sleep(300)
 
 @app.on_event("startup")
 async def startup_event():
