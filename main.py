@@ -5,7 +5,7 @@ from typing import List
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import uuid
 import os
 import asyncio
@@ -13,8 +13,8 @@ from datetime import datetime, timedelta
 
 app = FastAPI()
 
-# In-memory token store with expiry
-token_store = {}
+# --- In-memory token store with expiry ---
+token_store = {}  # token: {"file": filename, "expires_at": datetime}
 
 # --- Pydantic Models ---
 class Expense(BaseModel):
@@ -40,6 +40,12 @@ class ReimbursementRequest(BaseModel):
 # --- PDF Generation ---
 def generate_reimbursement_pdf(data: ReimbursementRequest, filename="reimbursement_form.pdf"):
     styles = getSampleStyleSheet()
+    link_style = ParagraphStyle(
+        name="LinkStyle",
+        fontSize=9,
+        textColor="blue",
+        underline=True
+    )
     story = []
 
     doc = SimpleDocTemplate(filename, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -48,7 +54,7 @@ def generate_reimbursement_pdf(data: ReimbursementRequest, filename="reimburseme
     story.append(Paragraph("<b>Reimbursement Request Form</b>", styles['Title']))
     story.append(Spacer(1, 12))
 
-    # Employee Info
+    # Employee Info Table
     employee_info = [
         ["Employee Name:", data.employee_name, "Employee ID:", data.employee_id],
         ["Department:", data.department, "Contact:", data.contact],
@@ -61,58 +67,73 @@ def generate_reimbursement_pdf(data: ReimbursementRequest, filename="reimburseme
     story.append(Spacer(1, 20))
 
     # Expense Table
-    expense_data = [["Date", "Category", "Amount", "Description", "Invoice"]] + \
-                   [[e.date, e.category, e.amount, e.description, e.invoice] for e in data.expenses]
+    expense_data = [["Date", "Category", "Amount", "Description", "Invoice"]]
+    for e in data.expenses:
+        invoice_cell = Paragraph(f'<link href="{e.invoice}">View Invoice</link>', link_style)
+        expense_data.append([
+            e.date,
+            e.category,
+            e.amount,
+            e.description,
+            invoice_cell
+        ])
     expense_table = Table(expense_data, colWidths=[70, 100, 70, 150, 120])
-    expense_table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.black),
-                                       ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-                                       ("ALIGN", (2,1), (2,-1), "RIGHT"),
-                                       ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                                       ("FONTSIZE", (0,0), (-1,-1), 9)]))
+    expense_table.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+        ("ALIGN", (2,1), (2,-1), "RIGHT"),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),  # align top for wrapped cells
+        ("FONTSIZE", (0,0), (-1,-1), 9)
+    ]))
     story.append(Paragraph("<b>Expense Details</b>", styles['Heading3']))
     story.append(expense_table)
     story.append(Spacer(1, 20))
 
-    # Summary
+    # Summary Table
     summary = [["Total Reimbursement Amount:", data.total_reimbursement_amount]]
     summary_table = Table(summary, colWidths=[200, 200])
-    summary_table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.black),
-                                       ("BACKGROUND", (0,0), (-1,-1), colors.whitesmoke)]))
+    summary_table.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,-1), colors.whitesmoke)
+    ]))
     story.append(Paragraph("<b>Summary</b>", styles['Heading3']))
     story.append(summary_table)
     story.append(Spacer(1, 20))
 
-    # Approvals
+    # Approvals Table
     approvals = [
         ["Employee Signature:", data.employee_signature, "Date:", data.employee_date],
         ["Manager Signature:", data.manager_signature, "Date:", data.manager_date]
     ]
     approvals_table = Table(approvals, colWidths=[130, 150, 50, 90])
-    approvals_table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 0.5, colors.black),
-                                         ("BACKGROUND", (0,0), (-1,-1), colors.whitesmoke)]))
+    approvals_table.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,-1), colors.whitesmoke)
+    ]))
     story.append(Paragraph("<b>Approvals</b>", styles['Heading3']))
     story.append(approvals_table)
     story.append(Spacer(1, 20))
 
-    # Footer
+    # Footer Note
     story.append(Paragraph("<i>Note: Please attach original invoices/receipts for all expenses claimed.</i>", styles['Normal']))
 
+    # Build PDF
     doc.build(story)
     return filename
 
-# --- Prepare PDF and return token ---
+# --- Step 1: Prepare PDF and return token ---
 @app.post("/generate-pdf/prepare/")
 async def prepare_pdf(request: ReimbursementRequest):
     token = str(uuid.uuid4())
     filename = f"{token}.pdf"
     generate_reimbursement_pdf(request, filename)
-
+    
     expires_at = datetime.utcnow() + timedelta(minutes=5)
     token_store[token] = {"file": filename, "expires_at": expires_at}
     
-    return {"download_url": f"https://reimbursemnet-generator.onrender.com/generate-pdf/download/{token}"}
+    return {"download_url": f"https://your-domain.com/generate-pdf/download/{token}"}
 
-# --- Download PDF ---
+# --- Step 2: Download PDF using token ---
 @app.get("/generate-pdf/download/{token}")
 async def download_pdf(token: str):
     if token not in token_store:
