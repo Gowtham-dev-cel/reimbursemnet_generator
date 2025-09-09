@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List
+from typing import List,Optional
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -41,6 +41,24 @@ class ReimbursementRequest(BaseModel):
     manager_signature: str = ""
     manager_date: str = ""
 
+# --- Invoice Models ---
+class CompanyInfo(BaseModel):
+    name: str
+    address: str
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+
+class ClientInfo(BaseModel):
+    name: str
+    address: str
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+
+class InvoiceInfo(BaseModel):
+    invoice_number: str
+    date: str
+    due_date: str
+
 class InvoiceItem(BaseModel):
     description: str
     date: str
@@ -49,9 +67,9 @@ class InvoiceItem(BaseModel):
     amount: float
 
 class InvoiceRequest(BaseModel):
-    company_info: dict
-    client_info: dict
-    invoice_info: dict
+    company_info: CompanyInfo
+    client_info: ClientInfo
+    invoice_info: InvoiceInfo
     items: List[InvoiceItem]
     tax_percent: float = 0
     discount: float = 0
@@ -132,18 +150,48 @@ def generate_reimbursement_pdf(data: ReimbursementRequest, filename: str):
     doc.build(story)
     return filename
 
+# --- Updated generate_invoice_pdf ---
 def generate_invoice_pdf(data: InvoiceRequest, filename: str):
     styles = getSampleStyleSheet()
     if "InvoiceTitle" not in styles:
         styles.add(ParagraphStyle(name='InvoiceTitle', fontSize=18, leading=22, spaceAfter=10, alignment=1))
     if "InvoiceHeading" not in styles:
         styles.add(ParagraphStyle(name='InvoiceHeading', fontSize=12, leading=14, spaceAfter=6))
-    
+
     story = []
     doc = SimpleDocTemplate(filename, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+
+    # --- Title ---
     story.append(Paragraph(f"<b>{data.invoice_type.capitalize()} Invoice</b>", styles['InvoiceTitle']))
     story.append(Spacer(1, 12))
 
+    # --- Company Info ---
+    story.append(Paragraph("<b>From:</b>", styles['Heading3']))
+    story.append(Paragraph(data.company_info.name, styles['Normal']))
+    story.append(Paragraph(data.company_info.address, styles['Normal']))
+    if data.company_info.email:
+        story.append(Paragraph(f"Email: {data.company_info.email}", styles['Normal']))
+    if data.company_info.phone:
+        story.append(Paragraph(f"Phone: {data.company_info.phone}", styles['Normal']))
+    story.append(Spacer(1, 6))
+
+    # --- Client Info ---
+    story.append(Paragraph("<b>To:</b>", styles['Heading3']))
+    story.append(Paragraph(data.client_info.name, styles['Normal']))
+    story.append(Paragraph(data.client_info.address, styles['Normal']))
+    if data.client_info.email:
+        story.append(Paragraph(f"Email: {data.client_info.email}", styles['Normal']))
+    if data.client_info.phone:
+        story.append(Paragraph(f"Phone: {data.client_info.phone}", styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # --- Invoice Info ---
+    story.append(Paragraph(f"Invoice #: {data.invoice_info.invoice_number}", styles['Normal']))
+    story.append(Paragraph(f"Date: {data.invoice_info.date}", styles['Normal']))
+    story.append(Paragraph(f"Due Date: {data.invoice_info.due_date}", styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # --- Items Table ---
     column_map = {
         "time_log": ["#", "Task/Description", "Date", "Hours", "Rate / Hour", "Amount"],
         "order": ["#", "Item", "Date", "Quantity", "Rate / Unit", "Amount"],
@@ -152,20 +200,32 @@ def generate_invoice_pdf(data: InvoiceRequest, filename: str):
     }
     headers = column_map.get(data.invoice_type, ["#", "Description", "Date", "Quantity", "Rate", "Amount"])
     table_data = [headers]
+
     for i, item in enumerate(data.items, start=1):
-        table_data.append([str(i), item.description, item.date, str(item.quantity), f"${item.rate:.2f}", f"${item.amount:.2f}"])
-    subtotal = sum([item.amount for item in data.items])
+        table_data.append([
+            str(i),
+            item.description,
+            item.date,
+            str(item.quantity),
+            f"${item.rate:.2f}",
+            f"${item.amount:.2f}"
+        ])
+
+    # --- Summary Calculations ---
+    subtotal = sum(item.amount for item in data.items)
     tax = subtotal * data.tax_percent / 100
     discount = data.discount
     total = subtotal + tax - discount
+
+    # --- Add summary rows ---
     table_data.extend([
         ["", "", "", "", "Subtotal", f"${subtotal:.2f}"],
         ["", "", "", "", f"Tax ({data.tax_percent}%)", f"${tax:.2f}"],
         ["", "", "", "", "Discount", f"${discount:.2f}"],
         ["", "", "", "", "Total Due", f"${total:.2f}"]
     ])
-    
-    invoice_table = Table(table_data, colWidths=[30, 180, 70, 80, 70, 70])
+
+    invoice_table = Table(table_data, colWidths=[30, 180, 70, 70, 70, 70])
     invoice_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f2f2f2')),
         ('ALIGN',(3,1),(-1,-1),'CENTER'),
@@ -175,8 +235,12 @@ def generate_invoice_pdf(data: InvoiceRequest, filename: str):
     ]))
     story.append(invoice_table)
     story.append(Spacer(1, 20))
+
+    # --- Terms & Notes ---
     story.append(Paragraph("<b>Terms & Notes</b>", styles['InvoiceHeading']))
     story.append(Paragraph(data.terms, styles['Normal']))
+
+    # --- Build PDF ---
     doc.build(story)
     return filename
 
@@ -187,7 +251,7 @@ async def prepare_pdf(request: ReimbursementRequest):
     filename = os.path.join(PDF_STORAGE, f"{token}.pdf")
     generate_reimbursement_pdf(request, filename)
     token_store[token] = {"file": filename, "expires_at": datetime.utcnow() + timedelta(minutes=5)}
-    return {"download_url": f"https://reimbursement-generator.onrender.com/generate-pdf/download/{token}"}
+    return {"download_url": f"https://reimbursemnet-generator.onrender.com/generate-pdf/download/{token}"}
 
 @app.get("/generate-pdf/download/{token}")
 async def download_pdf(token: str):
@@ -206,7 +270,7 @@ async def create_invoice(request: InvoiceRequest):
     filename = os.path.join(PDF_STORAGE, f"{token}.pdf")
     generate_invoice_pdf(request, filename)
     token_store[token] = {"file": filename, "expires_at": datetime.utcnow() + timedelta(minutes=10)}
-    return {"download_url": f"https://reimbursement-generator.onrender.com/invoice/download/{token}"}
+    return {"download_url": f"https://reimbursemnet-generator.onrender.com/invoice/download/{token}"}
 
 @app.get("/invoice/download/{token}")
 async def download_invoice(token: str):
