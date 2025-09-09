@@ -187,7 +187,7 @@ async def prepare_pdf(request: ReimbursementRequest):
     filename = os.path.join(PDF_STORAGE, f"{token}.pdf")
     generate_reimbursement_pdf(request, filename)
     token_store[token] = {"file": filename, "expires_at": datetime.utcnow() + timedelta(minutes=5)}
-    return {"download_url": f"/generate-pdf/download/{token}"}
+    return {"download_url": f"https://reimbursement-generator.onrender.com/generate-pdf/download/{token}"}
 
 @app.get("/generate-pdf/download/{token}")
 async def download_pdf(token: str):
@@ -206,7 +206,7 @@ async def create_invoice(request: InvoiceRequest):
     filename = os.path.join(PDF_STORAGE, f"{token}.pdf")
     generate_invoice_pdf(request, filename)
     token_store[token] = {"file": filename, "expires_at": datetime.utcnow() + timedelta(minutes=10)}
-    return {"download_url": f"/invoice/download/{token}"}
+    return {"download_url": f"https://reimbursement-generator.onrender.com/invoice/download/{token}"}
 
 @app.get("/invoice/download/{token}")
 async def download_invoice(token: str):
