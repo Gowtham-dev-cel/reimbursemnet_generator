@@ -319,7 +319,7 @@ async def generate_image(
         data = resp.json()
 
     if "artifacts" not in data or len(data["artifacts"]) == 0:
-        raise HTTPException(status_code=500, detail="Image not returned")
+        raise HTTPException(status_code=500, detail=f"Image not returned: {data.get('error', data)}")
 
     image_b64 = data["artifacts"][0]["base64"]
     image_bytes = base64.b64decode(image_b64)
