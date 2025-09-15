@@ -12,6 +12,7 @@ import asyncio
 from datetime import datetime, timedelta
 import httpx
 import base64
+import os
 
 app = FastAPI()
 
@@ -289,13 +290,14 @@ async def download_invoice(token: str):
     return FileResponse(entry["file"], media_type="application/pdf", filename="invoice.pdf")
 
 
-STABILITY_API_KEY = "sk-szp0aWoLoCC4NSnHD4teIcqQm694jKfDtb2MwmVNsYusziWX"
-STABILITY_URL = "https://api.stability.ai/v2beta/stable-image/generate/core"
+
+STABILITY_API_KEY = os.getenv("STABILITY_API_KEY")
+STABILITY_URL = os.getenv("STABILITY_URL")
+
 
 class ImageRequest(BaseModel):
     prompt: str
     output_format: str = "png"
-
 @app.post("/image/generate/")
 async def generate_image(
     prompt: str = Form(...),
@@ -306,24 +308,25 @@ async def generate_image(
         "Accept": "application/json"
     }
 
+    files = {
+        "prompt": (None, prompt),
+        "output_format": (None, output_format)
+    }
+
     async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            STABILITY_URL,
-            headers=headers,
-            files={
-                "prompt": (None, prompt),
-                "output_format": (None, output_format)
-            }
-        )
+        resp = await client.post(STABILITY_URL, headers=headers, files=files)
         resp.raise_for_status()
         data = resp.json()
 
-    if "artifacts" not in data or len(data["artifacts"]) == 0:
-        raise HTTPException(status_code=500, detail=f"Image not returned: {data.get('error', data)}")
+    # Support both new v2beta and old image key
+    if "artifacts" in data and len(data["artifacts"]) > 0:
+        image_b64 = data["artifacts"][0]["base64"]
+    elif "image" in data:
+        image_b64 = data["image"]
+    else:
+        raise HTTPException(status_code=500, detail=f"Image not returned: {data}")
 
-    image_b64 = data["artifacts"][0]["base64"]
     image_bytes = base64.b64decode(image_b64)
-
     token = str(uuid.uuid4())
     filename = os.path.join(IMAGE_STORAGE, f"{token}.png")
     with open(filename, "wb") as f:
