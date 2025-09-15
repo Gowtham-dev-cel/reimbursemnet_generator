@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List,Optional
@@ -297,7 +297,10 @@ class ImageRequest(BaseModel):
     output_format: str = "png"
 
 @app.post("/image/generate/")
-async def generate_image(request: ImageRequest):
+async def generate_image(
+    prompt: str = Form(...),
+    output_format: str = Form("png")
+):
     headers = {
         "Authorization": f"Bearer {STABILITY_API_KEY}",
         "Accept": "application/json"
@@ -307,27 +310,27 @@ async def generate_image(request: ImageRequest):
         resp = await client.post(
             STABILITY_URL,
             headers=headers,
-            data={"prompt": request.prompt, "output_format": request.output_format}
+            data={
+                "prompt": prompt,
+                "output_format": output_format
+            }
         )
         resp.raise_for_status()
         data = resp.json()
 
-    if "image" not in data:
+    if "artifacts" not in data:
         raise HTTPException(status_code=500, detail="Image not returned")
 
-    image_b64 = data["image"]
+    image_b64 = data["artifacts"][0]["base64"]
     image_bytes = base64.b64decode(image_b64)
 
     token = str(uuid.uuid4())
     filename = os.path.join(IMAGE_STORAGE, f"{token}.png")
-
     with open(filename, "wb") as f:
         f.write(image_bytes)
 
     token_store[token] = {"file": filename, "expires_at": datetime.utcnow() + timedelta(minutes=5)}
-
     return {"download_url": f"https://reimbursemnet-generator.onrender.com/image/download/{token}"}
-
 @app.get("/image/download/{token}")
 async def download_image(token: str):
     entry = token_store.get(token)
