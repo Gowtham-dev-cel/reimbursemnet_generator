@@ -331,6 +331,7 @@ async def generate_image(
 
     token_store[token] = {"file": filename, "expires_at": datetime.utcnow() + timedelta(minutes=5)}
     return {"download_url": f"https://reimbursemnet-generator.onrender.com/image/download/{token}"}
+
 @app.get("/image/download/{token}")
 async def download_image(token: str):
     entry = token_store.get(token)

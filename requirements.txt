@@ -3,4 +3,5 @@ uvicorn
 reportlab
 pydantic
 httpx
+python-multipart
 
