@@ -310,15 +310,15 @@ async def generate_image(
         resp = await client.post(
             STABILITY_URL,
             headers=headers,
-            data={
-                "prompt": prompt,
-                "output_format": output_format
+            files={
+                "prompt": (None, prompt),
+                "output_format": (None, output_format)
             }
         )
         resp.raise_for_status()
         data = resp.json()
 
-    if "artifacts" not in data:
+    if "artifacts" not in data or len(data["artifacts"]) == 0:
         raise HTTPException(status_code=500, detail="Image not returned")
 
     image_b64 = data["artifacts"][0]["base64"]
