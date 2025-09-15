@@ -10,12 +10,17 @@ import uuid
 import os
 import asyncio
 from datetime import datetime, timedelta
+import httpx
+import base64
 
 app = FastAPI()
 
 # --- Storage paths ---
 PDF_STORAGE = "./pdfs"
 os.makedirs(PDF_STORAGE, exist_ok=True)
+
+IMAGE_STORAGE = "./images"
+os.makedirs(IMAGE_STORAGE, exist_ok=True)
 
 # --- In-memory token store with expiry ---
 token_store = {}  # token: {"file": filename, "expires_at": datetime}
@@ -282,6 +287,56 @@ async def download_invoice(token: str):
         token_store.pop(token)
         raise HTTPException(status_code=410, detail="Token expired")
     return FileResponse(entry["file"], media_type="application/pdf", filename="invoice.pdf")
+
+
+STABILITY_API_KEY = "sk-szp0aWoLoCC4NSnHD4teIcqQm694jKfDtb2MwmVNsYusziWX"
+STABILITY_URL = "https://api.stability.ai/v2beta/stable-image/generate/core"
+
+@app.post("/image/generate/")
+async def generate_image(prompt: str, output_format: str = "png"):
+    headers = {
+        "Authorization": f"Bearer {STABILITY_API_KEY}",
+        "Accept": "application/json"
+    }
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(
+            STABILITY_URL,
+            headers=headers,
+            data={"prompt": prompt, "output_format": output_format}
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    if "image" not in data:
+        raise HTTPException(status_code=500, detail="Image not returned")
+
+    image_b64 = data["image"]
+    image_bytes = base64.b64decode(image_b64)
+
+    token = str(uuid.uuid4())
+    filename = os.path.join(IMAGE_STORAGE, f"{token}.png")
+
+    with open(filename, "wb") as f:
+        f.write(image_bytes)
+
+    token_store[token] = {"file": filename, "expires_at": datetime.utcnow() + timedelta(minutes=5)}
+
+    return {"download_url": f"https://reimbursemnet-generator.onrender.com/image/download/{token}"}
+
+@app.get("/image/download/{token}")
+async def download_image(token: str):
+    entry = token_store.get(token)
+    if not entry or not os.path.exists(entry["file"]):
+        raise HTTPException(status_code=404, detail="Invalid or expired token")
+
+    if datetime.utcnow() > entry["expires_at"]:
+        os.remove(entry["file"])
+        token_store.pop(token)
+        raise HTTPException(status_code=410, detail="Token expired")
+
+    return FileResponse(entry["file"], media_type="image/png", filename="generated.png")
+
 
 # --- Background cleanup ---
 async def cleanup_expired_files():
