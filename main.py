@@ -292,8 +292,12 @@ async def download_invoice(token: str):
 STABILITY_API_KEY = "sk-szp0aWoLoCC4NSnHD4teIcqQm694jKfDtb2MwmVNsYusziWX"
 STABILITY_URL = "https://api.stability.ai/v2beta/stable-image/generate/core"
 
+class ImageRequest(BaseModel):
+    prompt: str
+    output_format: str = "png"
+
 @app.post("/image/generate/")
-async def generate_image(prompt: str, output_format: str = "png"):
+async def generate_image(request: ImageRequest):
     headers = {
         "Authorization": f"Bearer {STABILITY_API_KEY}",
         "Accept": "application/json"
@@ -303,7 +307,7 @@ async def generate_image(prompt: str, output_format: str = "png"):
         resp = await client.post(
             STABILITY_URL,
             headers=headers,
-            data={"prompt": prompt, "output_format": output_format}
+            data={"prompt": request.prompt, "output_format": request.output_format}
         )
         resp.raise_for_status()
         data = resp.json()
