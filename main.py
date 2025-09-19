@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import FileResponse
+from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 from typing import List,Optional
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -13,6 +14,7 @@ from datetime import datetime, timedelta
 import httpx
 import base64
 import os
+import imgkit
 
 app = FastAPI()
 
@@ -360,6 +362,26 @@ async def cleanup_expired_files():
                 os.remove(file_path)
             token_store.pop(t)
         await asyncio.sleep(300)
+
+env = Environment(loader=FileSystemLoader("templates"))  # Adjust path if needed
+
+@app.post("/generate-newsletter/")
+async def generate_newsletter(data: dict):
+    # Render HTML from template and data
+    template = env.get_template("newsletter_template.html")
+    html_content = template.render(data)
+
+    # Prepare output file path
+    output_dir = "generated_images"
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = os.path.join(output_dir, f"newsletter_{timestamp}.png")
+
+    # Render HTML to PNG and save locally
+    imgkit.from_string(html_content, output_path)
+
+    # Return the saved file path
+    return {"image_path": output_path}
 
 @app.on_event("startup")
 async def startup_event():

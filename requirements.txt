@@ -4,4 +4,6 @@ reportlab
 pydantic
 httpx
 python-multipart
+jinja2
+imgkit
 

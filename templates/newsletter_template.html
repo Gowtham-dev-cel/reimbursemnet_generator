@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: {
+                    {
+                    theme.font
+                }
+            };
+            background-color: {
+                    {
+                    theme.background
+                }
+            };
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 700px;
+            margin: 20px auto;
+            background-color: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            background-color: {
+                    {
+                    theme.header
+                }
+            }
+
+            ;
+            color: #fff;
+            text-align: center;
+            padding: 30px 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .content {
+            padding: 20px 30px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+        }
+
+        .columns {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .column {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .cta {
+            display: inline-block;
+
+            background-color: {
+                    {
+                    theme.button
+                }
+            }
+
+            ;
+            color:#fff;
+            text-decoration:none;
+            padding:12px 25px;
+            border-radius:5px;
+            margin-top:10px;
+        }
+
+        .footer {
+            background-color: #f0f0f0;
+            font-size: 12px;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        img {
+            max-width: 100%;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <h1>{{ header.title }}</h1>
+        </div>
+
+        <!-- Content Sections -->
+        <div class="content">
+            {% for section in sections %}
+            <div class="section">
+                {% if section.type == "text" %}
+                <p>{{ section.content }}</p>
+                {% elif section.type == "image" %}
+                <img src="{{ section.src }}" alt="{{ section.alt }}">
+                {% elif section.type == "cta" %}
+                <a href="{{ section.url }}" class="cta">{{ section.text }}</a>
+                {% elif section.type == "columns" %}
+                <div class="columns">
+                    {% for col in section.columns %}
+                    <div class="column">
+                        {% if col.type == "text" %}<p>{{ col.content }}</p>{% endif %}
+                        {% if col.type == "image" %}<img src="{{ col.src }}" alt="{{ col.alt }}">{% endif %}
+                        {% if col.type == "cta" %}<a href="{{ col.url }}" class="cta">{{ col.text }}</a>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>{{ footer.company }} | <a href="{{ footer.website }}">{{ footer.website }}</a> | <a
+                    href="{{ footer.unsubscribe }}">Unsubscribe</a></p>
+            {% if footer.social_links %}
+            <p>
+                {% for s in footer.social_links %}
+                <a href="{{ s.url }}">{{ s.type|capitalize }}</a>{% if not loop.last %} | {% endif %}
+                {% endfor %}
+            </p>
+            {% endif %}
+        </div>
+
+    </div>
+</body>
+
+</html>
