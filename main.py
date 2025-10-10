@@ -383,49 +383,6 @@ async def generate_newsletter(data: dict):
     # Return the saved file path
     return {"image_path": output_path}
 
-@app.post("/thumbnail/create/")
-async def create_thumbnail(
-    logo_url: str = Form(...),
-    headline: str = Form("Your Headline"),
-    subtext: str = Form("Subtext Here"),
-    bg_color: str = Form("#0077b5"),
-    text_color: str = Form("white"),
-):
-    # Render HTML from template
-    template = env.get_template("thumbnail_template.html")
-    html_content = template.render(
-        logo_url=logo_url,
-        headline=headline,
-        subtext=subtext,
-        bg_color=bg_color,
-        text_color=text_color
-    )
-
-    # Save output directory
-    os.makedirs(IMAGE_STORAGE, exist_ok=True)
-    token = str(uuid.uuid4())
-    output_file = os.path.join(IMAGE_STORAGE, f"{token}.png")
-
-    # Convert HTML → PNG
-    imgkit.from_string(html_content, output_file)
-
-    # Store token with expiry
-    token_store[token] = {"file": output_file, "expires_at": datetime.utcnow() + timedelta(minutes=10)}
-
-    return {"download_url": f"/thumbnail/download/{token}"}
-
-@app.get("/thumbnail/download/{token}")
-async def download_thumbnail(token: str):
-    entry = token_store.get(token)
-    if not entry or not os.path.exists(entry["file"]):
-        raise HTTPException(status_code=404, detail="Invalid or expired token")
-    if datetime.utcnow() > entry["expires_at"]:
-        os.remove(entry["file"])
-        token_store.pop(token)
-        raise HTTPException(status_code=410, detail="Token expired")
-    return FileResponse(entry["file"], media_type="image/png", filename="thumbnail.png")
-
-
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(cleanup_expired_files())
