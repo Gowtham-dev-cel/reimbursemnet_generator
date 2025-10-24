@@ -1,149 +1,101 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Thumbnail Generator</title>
     <style>
         body {
-            font-family: {
-                    {
-                    theme.font
-                }
-            };
-            background-color: {
-                    {
-                    theme.background
-                }
-            };
             margin: 0;
-            padding: 0;
-        }
-        
-        .container {
-            max-width: 700px;
-            margin: 20px auto;
-            background-color: #fff;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .header {
-            background-color: {
-                    {
-                    theme.header
-                }
-            }
-
-            ;
-            color: #fff;
-            text-align: center;
-            padding: 30px 20px;
-        }
-
-        .header h1 {
-            margin: 0;
-            font-size: 28px;
-        }
-
-        .content {
-            padding: 20px 30px;
-        }
-
-        .section {
-            margin-bottom: 20px;
-        }
-
-        .columns {
+            font-family: "Poppins", sans-serif;
+            background: #f3f3f3;
             display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
         }
 
-        .column {
-            flex: 1;
-            min-width: 200px;
+        .thumbnail {
+            position: relative;
+            width: 900px;
+            height: 500px;
+            background-size: cover;
+            background-position: center;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .cta {
-            display: inline-block;
-
-            background-color: {
-                    {
-                    theme.button
-                }
-            }
-
-            ;
-            color:#fff;
-            text-decoration:none;
-            padding:12px 25px;
-            border-radius:5px;
-            margin-top:10px;
-        }
-
-        .footer {
-            background-color: #f0f0f0;
-            font-size: 12px;
+        .text-box {
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(6px);
+            padding: 40px 60px;
+            border-radius: 16px;
             text-align: center;
-            padding: 20px;
-            color: #666;
+            color: white;
+            max-width: 80%;
         }
 
-        img {
-            max-width: 100%;
-            border-radius: 5px;
+        .text-box h1 {
+            font-size: 42px;
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            line-height: 1.2;
+        }
+
+        .text-box p {
+            font-size: 18px;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+
+        .download-btn {
+            margin-top: 30px;
+            padding: 12px 28px;
+            background: #0077b5;
+            color: white;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: #005c8a;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
 
-        <!-- Header -->
-        <div class="header">
-            <h1>{{ header.title }}</h1>
+    <div id="capture" class="thumbnail" style="background-image: url('{{ bg }}');">
+        <div class="text-box">
+            <h1 id="title">{{ title }}</h1>
+            <p id="desc">{{ desc }}</p>
         </div>
-
-        <!-- Content Sections -->
-        <div class="content">
-            {% for section in sections %}
-            <div class="section">
-                {% if section.type == "text" %}
-                <p>{{ section.content }}</p>
-                {% elif section.type == "image" %}
-                <img src="{{ section.src }}" alt="{{ section.alt }}">
-                {% elif section.type == "cta" %}
-                <a href="{{ section.url }}" class="cta">{{ section.text }}</a>
-                {% elif section.type == "columns" %}
-                <div class="columns">
-                    {% for col in section.columns %}
-                    <div class="column">
-                        {% if col.type == "text" %}<p>{{ col.content }}</p>{% endif %}
-                        {% if col.type == "image" %}<img src="{{ col.src }}" alt="{{ col.alt }}">{% endif %}
-                        {% if col.type == "cta" %}<a href="{{ col.url }}" class="cta">{{ col.text }}</a>{% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-            <p>{{ footer.company }} | <a href="{{ footer.website }}">{{ footer.website }}</a> | <a
-                    href="{{ footer.unsubscribe }}">Unsubscribe</a></p>
-            {% if footer.social_links %}
-            <p>
-                {% for s in footer.social_links %}
-                <a href="{{ s.url }}">{{ s.type|capitalize }}</a>{% if not loop.last %} | {% endif %}
-                {% endfor %}
-            </p>
-            {% endif %}
-        </div>
-
     </div>
+
+    <button id="download" class="download-btn">Download Thumbnail</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script>
+        document.getElementById("download").addEventListener("click", async () => {
+            const captureEl = document.getElementById("capture");
+            const canvas = await html2canvas(captureEl, { scale: 3 }); // High resolution
+            const link = document.createElement("a");
+            link.download = "linkedin-thumbnail.png";
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+        });
+    </script>
 </body>
 
 </html>

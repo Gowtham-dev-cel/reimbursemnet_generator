@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Form, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 from typing import List,Optional
@@ -15,8 +15,14 @@ import httpx
 import base64
 import os
 import imgkit
+from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 # --- Storage paths ---
 PDF_STORAGE = "./pdfs"
@@ -363,25 +369,23 @@ async def cleanup_expired_files():
             token_store.pop(t)
         await asyncio.sleep(300)
 
-env = Environment(loader=FileSystemLoader("templates"))  # Adjust path if needed
 
-@app.post("/generate-newsletter/")
-async def generate_newsletter(data: dict):
-    # Render HTML from template and data
-    template = env.get_template("newsletter_template.html")
-    html_content = template.render(data)
+@app.get("/thumbnail", response_class=HTMLResponse)
+async def get_thumbnail(request: Request, bg: str = None, title: str = None, desc: str = None):
+    """
+    Serve dynamic LinkedIn thumbnail HTML
+    """
+    return templates.TemplateResponse(
+        "thumbnail.html",
+        {
+            "request": request,
+            "bg": bg or "https://images.unsplash.com/photo-1522202176988-66273c2fd55f",
+            "title": title or "Empower Your Network",
+            "desc": desc or "Share insights. Spark conversations. Build your brand with impact.",
+        },
+    )
 
-    # Prepare output file path
-    output_dir = "generated_images"
-    os.makedirs(output_dir, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = os.path.join(output_dir, f"newsletter_{timestamp}.png")
 
-    # Render HTML to PNG and save locally
-    imgkit.from_string(html_content, output_path)
-
-    # Return the saved file path
-    return {"image_path": output_path}
 
 @app.on_event("startup")
 async def startup_event():
