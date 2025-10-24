@@ -85,11 +85,16 @@
 
     <button id="download" class="download-btn">Download Thumbnail</button>
 
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script>
         document.getElementById("download").addEventListener("click", async () => {
             const captureEl = document.getElementById("capture");
-            const canvas = await html2canvas(captureEl, { scale: 3 }); // High resolution
+            const canvas = await html2canvas(captureEl, {
+                scale: 3,          // HD quality
+                useCORS: true,     // allow CORS images
+                logging: true,     // helps debugging
+                allowTaint: false  // prevents security restriction
+            });
+
             const link = document.createElement("a");
             link.download = "linkedin-thumbnail.png";
             link.href = canvas.toDataURL("image/png");
