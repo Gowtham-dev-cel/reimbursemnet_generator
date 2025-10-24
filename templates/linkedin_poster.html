@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poster Generator</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: "Poppins", sans-serif;
+            background: #f3f3f3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .poster {
+            position: relative;
+            width: 900px;
+            height: 500px;
+            background-size: cover;
+            background-position: center;
+            overflow: hidden;
+            border-radius: 16px;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .overlay {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(6px);
+            padding: 40px 60px;
+            border-radius: 16px;
+            text-align: center;
+            color: #111;
+            max-width: 80%;
+        }
+
+        .overlay h1 {
+            font-size: 40px;
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            line-height: 1.2;
+        }
+
+        .overlay p {
+            font-size: 18px;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+
+        .logo {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 70px;
+            height: auto;
+            opacity: 0.7;
+            border-radius: 10px;
+        }
+
+        .download-btn {
+            margin-top: 30px;
+            padding: 12px 28px;
+            background: #28a745;
+            color: white;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="capture" class="poster" style="background-image: url('{{ background }}');">
+        {% if logo %}
+        <img src="{{ logo }}" alt="Logo" class="logo" />
+        {% endif %}
+        <div class="overlay">
+            <h1 id="heading">{{ heading }}</h1>
+            <p id="text">{{ text }}</p>
+        </div>
+    </div>
+
+    <button id="download" class="download-btn">Download Poster</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script>
+        document.getElementById("download").addEventListener("click", async () => {
+            const captureEl = document.getElementById("capture");
+            const canvas = await html2canvas(captureEl, {
+                scale: 3,
+                useCORS: true,
+                logging: true,
+                allowTaint: false,
+            });
+
+            const link = document.createElement("a");
+            link.download = "poster.png";
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+        });
+    </script>
+
+</body>
+
+</html>

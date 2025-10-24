@@ -385,7 +385,27 @@ async def get_thumbnail(request: Request, bg: str = None, title: str = None, des
         },
     )
 
-
+@app.get("/poster", response_class=HTMLResponse)
+async def get_poster(
+    request: Request,
+    heading: str = None,
+    text: str = None,
+    background: str = None,
+    logo: str = None,
+):
+    """
+    Serve dynamic poster preview HTML (similar to /thumbnail)
+    """
+    return templates.TemplateResponse(
+        "linkedin_poster.html",
+        {
+            "request": request,
+            "heading": heading or "Create Stunning Posters Instantly!",
+            "text": text or "Generate high-quality posters right from your browser.",
+            "background": background or "https://images.unsplash.com/photo-1503264116251-35a269479413",
+            "logo": logo or "https://upload.wikimedia.org/wikipedia/commons/a/ab/Logo_TV_2015.png",
+        },
+    )
 
 @app.on_event("startup")
 async def startup_event():
